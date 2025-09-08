@@ -77,10 +77,16 @@ const MainTabNavigator = () => {
   );
 };
 
+import { useApp } from '../context/AppContext';
+
 export default function AppNavigator() {
-  // TODO: Implement auth state management
-  const isAuthenticated = false;
-  const hasCompletedSetup = false;
+  const { userProfile, isLoading } = useApp();
+  const { isAuthenticated, hasCompletedSetup } = userProfile;
+
+  if (isLoading) {
+    // You could return a loading screen here
+    return null;
+  }
 
   return (
     <NavigationContainer>
