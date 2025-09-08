@@ -32,6 +32,26 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
+.env.production
+.env.staging
 
 # typescript
 *.tsbuildinfo
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Cache and logs
+.cache/
+*.log
+logs/
+coverage/
+
+# Security sensitive files
+*.pem
+*.key
+*.p8
+*.p12
