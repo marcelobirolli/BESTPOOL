@@ -7,11 +7,61 @@ import {
   TouchableOpacity,
   SafeAreaView,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useApp } from '../../context/AppContext';
+import { usePoolRecommendations } from '../../hooks/usePoolRecommendations';
 
-// Mock recommendation data
-const mockRecommendations = [
+export default function RecommendationsScreen() {
+  const { userPreferences } = useApp();
+  const [selectedRecommendation, setSelectedRecommendation] = useState<string | null>(null);
+
+  const {
+    recommendations,
+    loading,
+    error,
+    refresh,
+    isConnected,
+    lastUpdated,
+    priceUpdates
+  } = usePoolRecommendations({
+    totalInvestment: userPreferences.totalInvestment,
+    expectedDailyFeesPercent: userPreferences.expectedDailyFeesPercent,
+    selectedPoolIds: userPreferences.selectedPoolIds,
+    riskTolerance: userPreferences.riskTolerance,
+    autoRefresh: true,
+    refreshInterval: 30000
+  });
+
+  if (loading && !recommendations) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.loadingText}>Carregando recomendações...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={80} color="#ef4444" />
+          <Text style={styles.errorTitle}>Erro ao carregar dados</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={refresh}>
+            <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Mock recommendations for fallback (to be removed in production)
+  const mockRecommendations = [
   {
     id: '1',
     poolName: 'SOL/USDC',
@@ -59,17 +109,41 @@ const mockRecommendations = [
   },
 ];
 
-export default function RecommendationsScreen() {
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedRecommendation, setSelectedRecommendation] = useState<string | null>(null);
+  // Use real data if available, fallback to mock data
+  const displayData = recommendations || {
+    totalInvestment: userPreferences.totalInvestment,
+    expectedDailyYield: 42.50,
+    expectedDailyYieldPercentage: 0.425,
+    portfolioRisk: 'medium' as const,
+    pools: mockRecommendations.map(mock => ({
+      poolId: mock.id,
+      poolName: mock.poolName,
+      address: '',
+      currentPrice: parseFloat(mock.currentPrice.replace('$', '').replace(',', '')),
+      priceChange24h: parseFloat(mock.trendStrength.replace('%', '')),
+      liquidity: parseFloat(mock.liquidity.replace('$', '').replace('M', '')) * 1000000,
+      volume24h: parseFloat(mock.volume24h.replace('$', '').replace('M', '')) * 1000000,
+      apy: parseFloat(mock.expectedAPY.replace('%', '')),
+      tvl: parseFloat(mock.liquidity.replace('$', '').replace('M', '')) * 1000000,
+      fee: 0.25,
+      riskLevel: mock.volatilityRisk.toLowerCase() as 'low' | 'medium' | 'high',
+      hedgeType: 'bluechip' as const,
+      trend: mock.trend.toLowerCase() as 'bull' | 'bear' | 'stable',
+      trendStrength: parseFloat(mock.trendStrength.replace('%', '')),
+      impermanentLossEstimate: parseFloat(mock.impermanentLoss.replace('%', '')),
+      allocationSuggestion: {
+        amount: parseFloat(mock.allocation.split('$')[1].split(' ')[0].replace(',', '')),
+        percentage: parseFloat(mock.allocation.split('(')[1].split('%')[0])
+      }
+    })),
+    hedgeRatio: 20,
+    correlationScore: 0.3,
+    lastUpdated: new Date()
+  };
 
   const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    // Simulate API call
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 2000);
-  }, []);
+    refresh();
+  }, [refresh]);
 
   const getTrendColor = (trend: string) => {
     switch (trend.toLowerCase()) {
@@ -109,49 +183,63 @@ export default function RecommendationsScreen() {
           <Text style={styles.summaryTitle}>Strategy Overview</Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Total Allocation:</Text>
-            <Text style={styles.summaryValue}>$10,000</Text>
+            <Text style={styles.summaryValue}>${displayData.totalInvestment.toLocaleString()}</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Expected Daily Yield:</Text>
-            <Text style={[styles.summaryValue, { color: '#10b981' }]}>$42.50 (0.425%)</Text>
+            <Text style={[styles.summaryValue, { color: '#10b981' }]}>
+              ${displayData.expectedDailyYield.toFixed(2)} ({displayData.expectedDailyYieldPercentage.toFixed(3)}%)
+            </Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Portfolio Risk:</Text>
-            <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>Medium</Text>
+            <Text style={[styles.summaryValue, { color: getRiskColor(displayData.portfolioRisk) }]}>
+              {displayData.portfolioRisk.charAt(0).toUpperCase() + displayData.portfolioRisk.slice(1)}
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>WebSocket Status:</Text>
+            <Text style={[styles.summaryValue, { color: isConnected ? '#10b981' : '#ef4444' }]}>
+              {isConnected ? 'Conectado' : 'Desconectado'}
+            </Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Last Updated:</Text>
-            <Text style={styles.summaryValue}>2 minutes ago</Text>
+            <Text style={styles.summaryValue}>
+              {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Carregando...'}
+            </Text>
           </View>
         </View>
 
         {/* Recommendations List */}
-        {mockRecommendations.map((recommendation) => (
-          <View key={recommendation.id} style={styles.recommendationCard}>
+        {displayData.pools.map((pool) => (
+          <View key={pool.poolId} style={styles.recommendationCard}>
             <TouchableOpacity
               onPress={() => 
                 setSelectedRecommendation(
-                  selectedRecommendation === recommendation.id ? null : recommendation.id
+                  selectedRecommendation === pool.poolId ? null : pool.poolId
                 )
               }
             >
               <View style={styles.cardHeader}>
                 <View style={styles.poolInfo}>
-                  <Text style={styles.poolName}>{recommendation.poolName}</Text>
-                  <Text style={styles.allocation}>{recommendation.allocation}</Text>
+                  <Text style={styles.poolName}>{pool.poolName}</Text>
+                  <Text style={styles.allocation}>
+                    ${pool.allocationSuggestion?.amount.toLocaleString()} ({pool.allocationSuggestion?.percentage.toFixed(1)}%)
+                  </Text>
                 </View>
                 <View style={styles.trendBadge}>
                   <View style={[
                     styles.trendIndicator,
-                    { backgroundColor: getTrendColor(recommendation.trend) }
+                    { backgroundColor: getTrendColor(pool.trend) }
                   ]}>
-                    <Text style={styles.trendText}>{recommendation.trend.toUpperCase()}</Text>
+                    <Text style={styles.trendText}>{pool.trend.toUpperCase()}</Text>
                   </View>
                   <Text style={[
                     styles.trendStrength,
-                    { color: getTrendColor(recommendation.trend) }
+                    { color: getTrendColor(pool.trend) }
                   ]}>
-                    {recommendation.trendStrength}
+                    {pool.trendStrength > 0 ? '+' : ''}{pool.trendStrength.toFixed(1)}%
                   </Text>
                 </View>
               </View>
@@ -160,59 +248,73 @@ export default function RecommendationsScreen() {
                 <View style={styles.metric}>
                   <Text style={styles.metricLabel}>APY</Text>
                   <Text style={[styles.metricValue, { color: '#10b981' }]}>
-                    {recommendation.expectedAPY}
+                    {pool.apy.toFixed(1)}%
                   </Text>
                 </View>
                 <View style={styles.metric}>
                   <Text style={styles.metricLabel}>IL Risk</Text>
                   <Text style={[styles.metricValue, { color: '#ef4444' }]}>
-                    {recommendation.impermanentLoss}
+                    {pool.impermanentLossEstimate.toFixed(1)}%
                   </Text>
                 </View>
                 <View style={styles.metric}>
                   <Text style={styles.metricLabel}>Risk</Text>
                   <Text style={[
                     styles.metricValue,
-                    { color: getRiskColor(recommendation.volatilityRisk) }
+                    { color: getRiskColor(pool.riskLevel) }
                   ]}>
-                    {recommendation.volatilityRisk}
+                    {pool.riskLevel.charAt(0).toUpperCase() + pool.riskLevel.slice(1)}
                   </Text>
                 </View>
                 <View style={styles.metric}>
                   <Text style={styles.metricLabel}>Price</Text>
                   <Text style={styles.metricValue}>
-                    {recommendation.currentPrice}
+                    ${pool.currentPrice.toLocaleString()}
                   </Text>
                 </View>
               </View>
 
               {/* Expanded Details */}
-              {selectedRecommendation === recommendation.id && (
+              {selectedRecommendation === pool.poolId && (
                 <View style={styles.expandedDetails}>
                   <View style={styles.detailSection}>
                     <Text style={styles.detailTitle}>Position Details</Text>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Recommended Range:</Text>
-                      <Text style={styles.detailValue}>{recommendation.priceRange}</Text>
+                      <Text style={styles.detailValue}>
+                        ${pool.optimalRange?.lower.toFixed(2)} - ${pool.optimalRange?.upper.toFixed(2)}
+                      </Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Pool Liquidity:</Text>
-                      <Text style={styles.detailValue}>{recommendation.liquidity}</Text>
+                      <Text style={styles.detailValue}>${(pool.liquidity / 1000000).toFixed(1)}M</Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>24h Volume:</Text>
-                      <Text style={styles.detailValue}>{recommendation.volume24h}</Text>
+                      <Text style={styles.detailValue}>${(pool.volume24h / 1000000).toFixed(1)}M</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Pool Type:</Text>
+                      <Text style={styles.detailValue}>{pool.hedgeType}</Text>
                     </View>
                   </View>
 
                   <View style={styles.detailSection}>
-                    <Text style={styles.detailTitle}>Alerts & Triggers</Text>
-                    {recommendation.alerts.map((alert, index) => (
-                      <View key={index} style={styles.alertItem}>
-                        <Ionicons name="warning" size={16} color="#f59e0b" />
-                        <Text style={styles.alertText}>{alert}</Text>
+                    <Text style={styles.detailTitle}>Price Updates</Text>
+                    {priceUpdates[pool.poolId] && (
+                      <View style={styles.alertItem}>
+                        <Ionicons name="trending-up" size={16} color="#6366f1" />
+                        <Text style={styles.alertText}>
+                          Última atualização: {new Date(priceUpdates[pool.poolId].timestamp).toLocaleTimeString()}
+                        </Text>
                       </View>
-                    ))}
+                    )}
+                    <View style={styles.alertItem}>
+                      <Ionicons name="information-circle" size={16} color="#10b981" />
+                      <Text style={styles.alertText}>
+                        Pool configurada com hedge estratégico
+                      </Text>
+                    </View>
                   </View>
                 </View>
               )}
@@ -408,5 +510,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 32,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#374151',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  retryButton: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -8,6 +8,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useApp } from '../../context/AppContext';
 
 interface LoginScreenProps {
   navigation?: any;
@@ -15,13 +16,15 @@ interface LoginScreenProps {
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const { login, connectWallet } = useApp();
 
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
-      // TODO: Implement Google OAuth
       console.log('Google login pressed');
-      Alert.alert('Coming Soon', 'Google login will be implemented next');
+      // Demo login - em produção seria Google OAuth
+      await login('demo@bestpool.com');
+      Alert.alert('Sucesso!', 'Login realizado com sucesso!');
     } catch (error) {
       console.error('Google login error:', error);
       Alert.alert('Error', 'Login failed. Please try again.');
@@ -33,9 +36,11 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const handlePhantomLogin = async () => {
     setIsLoading(true);
     try {
-      // TODO: Implement Phantom wallet connection
       console.log('Phantom login pressed');
-      Alert.alert('Coming Soon', 'Phantom wallet login will be implemented next');
+      // Demo wallet connection - em produção seria Phantom SDK
+      const demoWalletAddress = 'DemoWallet123...ABC';
+      await connectWallet(demoWalletAddress);
+      Alert.alert('Sucesso!', 'Carteira conectada com sucesso!');
     } catch (error) {
       console.error('Phantom login error:', error);
       Alert.alert('Error', 'Wallet connection failed. Please try again.');

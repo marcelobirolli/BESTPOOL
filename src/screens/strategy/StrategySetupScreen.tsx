@@ -8,23 +8,27 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Switch,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getAllPools } from '../../config/pools';
+import { useApp } from '../../context/AppContext';
 
 interface StrategySetupScreenProps {
   navigation?: any;
 }
 
 export default function StrategySetupScreen({ navigation }: StrategySetupScreenProps) {
-  const [totalVolume, setTotalVolume] = useState('');
-  const [expectedDailyFees, setExpectedDailyFees] = useState('');
+  const { userPreferences, updatePreferences, completeSetup } = useApp();
+  
+  const [totalVolume, setTotalVolume] = useState(userPreferences.totalInvestment.toString());
+  const [expectedDailyFees, setExpectedDailyFees] = useState(userPreferences.expectedDailyFeesPercent.toString());
   const [selectedPools, setSelectedPools] = useState<Record<string, boolean>>({
-    SOL_USDC: true,
-    CBBTC_USDC: true,
-    WETH_USDC: true,
-    EURC_USDC: true,
-    USDT_USDC: false,
+    SOL_USDC: userPreferences.selectedPoolIds.includes('SOL_USDC'),
+    CBBTC_USDC: userPreferences.selectedPoolIds.includes('CBBTC_USDC'),
+    WETH_USDC: userPreferences.selectedPoolIds.includes('WETH_USDC'),
+    EURC_USDC: userPreferences.selectedPoolIds.includes('EURC_USDC'),
+    USDT_USDC: userPreferences.selectedPoolIds.includes('USDT_USDC'),
   });
 
   const pools = getAllPools();
@@ -36,28 +40,35 @@ export default function StrategySetupScreen({ navigation }: StrategySetupScreenP
     }));
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const selectedPoolIds = Object.keys(selectedPools).filter(id => selectedPools[id]);
     
     if (!totalVolume || !expectedDailyFees) {
-      alert('Please fill in all required fields');
+      Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios');
       return;
     }
 
     if (selectedPoolIds.length === 0) {
-      alert('Please select at least one pool');
+      Alert.alert('Erro', 'Por favor, selecione pelo menos uma pool');
       return;
     }
 
-    // TODO: Save strategy configuration
-    console.log('Strategy Configuration:', {
-      totalVolume: parseFloat(totalVolume),
-      expectedDailyFees: parseFloat(expectedDailyFees),
-      selectedPools: selectedPoolIds,
-    });
+    try {
+      // Save strategy configuration
+      await updatePreferences({
+        totalInvestment: parseFloat(totalVolume),
+        expectedDailyFeesPercent: parseFloat(expectedDailyFees),
+        selectedPoolIds,
+      });
 
-    // Navigate to recommendations
-    alert('Strategy saved! Proceeding to recommendations...');
+      // Complete setup process
+      await completeSetup();
+
+      Alert.alert('Sucesso!', 'Estratégia configurada! Redirecionando para recomendações...');
+    } catch (error) {
+      console.error('Error saving strategy:', error);
+      Alert.alert('Erro', 'Falha ao salvar configuração. Tente novamente.');
+    }
   };
 
   const getRiskLevelColor = (risk: string) => {
